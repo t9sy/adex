@@ -43,6 +43,52 @@ class StreamWorker(QThread):
             self.stream_error.emit(str(e))
 
 
+class VisionWorker(QThread):
+    """Hintergrund-Thread für Screenshot-/Bild-Analyse über Vision-Modell."""
+    token_received = pyqtSignal(str)
+    stream_finished = pyqtSignal(str)
+    stream_error = pyqtSignal(str)
+
+    def __init__(self, nim_client: NIMClient, image_path: str, prompt: str):
+        super().__init__()
+        self.nim_client = nim_client
+        self.image_path = image_path
+        self.prompt = prompt
+        self._full_response = ""
+
+    def run(self) -> None:
+        try:
+            for token in self.nim_client.stream_vision(self.image_path, self.prompt):
+                self._full_response += token
+                self.token_received.emit(token)
+            self.stream_finished.emit(self._full_response)
+        except Exception as e:
+            self.stream_error.emit(str(e))
+
+
+class TranslateWorker(QThread):
+    """Hintergrund-Thread für Übersetzung über NIM API."""
+    token_received = pyqtSignal(str)
+    stream_finished = pyqtSignal(str)
+    stream_error = pyqtSignal(str)
+
+    def __init__(self, nim_client: NIMClient, text: str, target_lang: str):
+        super().__init__()
+        self.nim_client = nim_client
+        self.text = text
+        self.target_lang = target_lang
+        self._full_response = ""
+
+    def run(self) -> None:
+        try:
+            for token in self.nim_client.translate(self.text, self.target_lang):
+                self._full_response += token
+                self.token_received.emit(token)
+            self.stream_finished.emit(self._full_response)
+        except Exception as e:
+            self.stream_error.emit(str(e))
+
+
 class MessageBubble(QFrame):
     """Einzelne Chat-Nachricht als Blase dargestellt."""
 
@@ -259,6 +305,14 @@ class ChatWidget(QWidget):
         self.chat_input.send_message.connect(self.send_message)
         input_layout.addWidget(self.chat_input, stretch=1)
 
+        # Screenshot-Button
+        self.screenshot_btn = QPushButton("📷")
+        self.screenshot_btn.setObjectName("sendBtn")
+        self.screenshot_btn.setToolTip("Screenshot aufnehmen und analysieren")
+        self.screenshot_btn.clicked.connect(self._take_screenshot)
+        self.screenshot_btn.setFixedSize(44, 44)
+        input_layout.addWidget(self.screenshot_btn)
+
         self.send_btn = QPushButton("➤")
         self.send_btn.setObjectName("sendBtn")
         self.send_btn.setToolTip("Nachricht senden (Enter)")
@@ -307,6 +361,13 @@ class ChatWidget(QWidget):
         if self.command_parser:
             handled, response = self.command_parser.try_parse(text)
             if handled:
+                # Übersetzung über NIM API streamen
+                if response.startswith("__TRANSLATE__:") and self.nim_client:
+                    parts = response.split(":", 2)
+                    target_lang = parts[1] if len(parts) > 1 else "Englisch"
+                    translate_text = parts[2] if len(parts) > 2 else text
+                    self._start_translate_stream(translate_text, target_lang)
+                    return
                 self._add_message_bubble(response, is_user=False, timestamp=timestamp)
                 if self.database:
                     self.database.save_chat_message(self.session_id, "assistant", response)
@@ -354,6 +415,7 @@ class ChatWidget(QWidget):
         """Streaming abgeschlossen."""
         self._is_streaming = False
         self.send_btn.setEnabled(True)
+        self.screenshot_btn.setEnabled(True)
         self.typing_label.setVisible(False)
         self._current_bubble = None
 
@@ -367,6 +429,7 @@ class ChatWidget(QWidget):
         """Fehler beim Streaming."""
         self._is_streaming = False
         self.send_btn.setEnabled(True)
+        self.screenshot_btn.setEnabled(True)
         self.typing_label.setVisible(False)
 
         if self._current_bubble:
@@ -420,3 +483,102 @@ class ChatWidget(QWidget):
         """
         info_text = f"📋 *{label}:*\n{context[:500]}{'...' if len(context) > 500 else ''}"
         self._add_message_bubble(info_text, is_user=False)
+
+    def _take_screenshot(self) -> None:
+        """Screenshot aufnehmen und zur Analyse senden."""
+        if self._is_streaming:
+            return
+
+        if not self.nim_client:
+            self._add_message_bubble(
+                "⚠️ Kein API-Key konfiguriert. Screenshot-Analyse benötigt die NVIDIA NIM API.",
+                is_user=False,
+            )
+            return
+
+        try:
+            from PIL import ImageGrab
+        except ImportError:
+            try:
+                import subprocess
+                import os
+                import tempfile
+                screenshot_dir = os.path.join(os.path.expanduser("~"), ".adex")
+                os.makedirs(screenshot_dir, exist_ok=True)
+                screenshot_path = os.path.join(screenshot_dir, "screenshot.png")
+                result = subprocess.run(
+                    ["import", "-window", "root", screenshot_path],
+                    capture_output=True, timeout=10,
+                )
+                if result.returncode != 0:
+                    self._add_message_bubble(
+                        "⚠️ Screenshot konnte nicht aufgenommen werden.",
+                        is_user=False,
+                    )
+                    return
+                self._analyze_screenshot(screenshot_path)
+                return
+            except Exception:
+                self._add_message_bubble(
+                    "⚠️ Screenshot-Tool nicht verfügbar. Installiere `Pillow` oder `imagemagick`.",
+                    is_user=False,
+                )
+                return
+
+        import os
+        screenshot_dir = os.path.join(os.path.expanduser("~"), ".adex")
+        os.makedirs(screenshot_dir, exist_ok=True)
+        screenshot_path = os.path.join(screenshot_dir, "screenshot.png")
+
+        screenshot = ImageGrab.grab()
+        screenshot.save(screenshot_path, "PNG")
+        self._analyze_screenshot(screenshot_path)
+
+    def _analyze_screenshot(self, image_path: str) -> None:
+        """Screenshot an Vision-Modell senden und Analyse streamen."""
+        timestamp = datetime.now().strftime("%H:%M")
+        self._add_message_bubble("📷 *Screenshot aufgenommen — Analyse läuft...*", is_user=False)
+
+        prompt = self.chat_input.toPlainText().strip()
+        if not prompt:
+            prompt = "Beschreibe dieses Bild detailliert auf Deutsch. Was siehst du?"
+        else:
+            self.chat_input.clear()
+            self._add_message_bubble(prompt, is_user=True, timestamp=timestamp)
+
+        self._is_streaming = True
+        self.send_btn.setEnabled(False)
+        self.screenshot_btn.setEnabled(False)
+        self.typing_label.setText("Adex analysiert Screenshot...")
+        self.typing_label.setVisible(True)
+
+        self._current_bubble = MessageBubble("", is_user=False, timestamp=timestamp)
+        self._current_bubble._raw_content = ""
+        idx = self.chat_layout.count() - 1
+        self.chat_layout.insertWidget(idx, self._current_bubble)
+
+        self._stream_worker = VisionWorker(self.nim_client, image_path, prompt)
+        self._stream_worker.token_received.connect(self._on_token)
+        self._stream_worker.stream_finished.connect(self._on_stream_finished)
+        self._stream_worker.stream_error.connect(self._on_stream_error)
+        self._stream_worker.start()
+
+    def _start_translate_stream(self, text: str, target_lang: str) -> None:
+        """Übersetzung über NIM API streamen."""
+        self._is_streaming = True
+        self.send_btn.setEnabled(False)
+        self.screenshot_btn.setEnabled(False)
+        self.typing_label.setText("Adex übersetzt...")
+        self.typing_label.setVisible(True)
+
+        timestamp = datetime.now().strftime("%H:%M")
+        self._current_bubble = MessageBubble("", is_user=False, timestamp=timestamp)
+        self._current_bubble._raw_content = ""
+        idx = self.chat_layout.count() - 1
+        self.chat_layout.insertWidget(idx, self._current_bubble)
+
+        self._stream_worker = TranslateWorker(self.nim_client, text, target_lang)
+        self._stream_worker.token_received.connect(self._on_token)
+        self._stream_worker.stream_finished.connect(self._on_stream_finished)
+        self._stream_worker.stream_error.connect(self._on_stream_error)
+        self._stream_worker.start()

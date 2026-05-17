@@ -7,10 +7,13 @@ und leitet sie an die entsprechenden Module weiter.
 import os
 import re
 import math
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from core.file_ops import FileAssistant
 from core.web_search import WebSearch
+
+if TYPE_CHECKING:
+    from core.nim_client import NIMClient
 
 
 class Calculator:
@@ -81,67 +84,23 @@ class Calculator:
         return ""
 
 
-class Translator:
-    """Übersetzung über LibreTranslate API (kostenlos, kein Key nötig)."""
-
-    LIBRE_URL = "https://libretranslate.com/translate"
-    FALLBACK_URLS = [
-        "https://translate.argosopentech.com/translate",
-        "https://translate.terraprint.co/translate",
-    ]
-
-    LANG_MAP = {
-        "englisch": "en", "deutsch": "de", "französisch": "fr",
-        "spanisch": "es", "italienisch": "it", "portugiesisch": "pt",
-        "russisch": "ru", "chinesisch": "zh", "japanisch": "ja",
-        "koreanisch": "ko", "arabisch": "ar", "niederländisch": "nl",
-        "polnisch": "pl", "türkisch": "tr", "hindi": "hi",
-        "english": "en", "german": "de", "french": "fr",
-        "spanish": "es", "italian": "it", "portuguese": "pt",
-        "russian": "ru", "chinese": "zh", "japanese": "ja",
-    }
-
-    def translate(self, text: str, target: str = "en", source: str = "auto") -> str:
-        """Text übersetzen."""
-        import requests
-
-        target_code = self.LANG_MAP.get(target.lower(), target.lower())
-        source_code = self.LANG_MAP.get(source.lower(), source.lower())
-
-        payload = {
-            "q": text,
-            "source": source_code,
-            "target": target_code,
-            "format": "text",
-        }
-
-        urls = [self.LIBRE_URL] + self.FALLBACK_URLS
-        for url in urls:
-            try:
-                resp = requests.post(url, json=payload, timeout=10)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    translated = data.get("translatedText", "")
-                    if translated:
-                        return f"**Übersetzung ({target_code}):**\n{translated}"
-                continue
-            except Exception:
-                continue
-
-        return "⚠️ Übersetzungsdienst nicht erreichbar. Versuche es später erneut."
-
-
 class CommandParser:
     """
     Erkennt eingebettete Kommandos in Chat-Nachrichten.
     Gibt (handled: bool, response: str) zurück.
+    Übersetzung läuft über die NIM API (kein LibreTranslate nötig).
     """
 
-    def __init__(self, file_assistant: FileAssistant, web_search: WebSearch):
+    def __init__(
+        self,
+        file_assistant: FileAssistant,
+        web_search: WebSearch,
+        nim_client: "Optional[NIMClient]" = None,
+    ):
         self.file_assistant = file_assistant
         self.web_search = web_search
+        self.nim_client = nim_client
         self.calculator = Calculator()
-        self.translator = Translator()
 
     def try_parse(self, message: str) -> tuple[bool, str]:
         """
@@ -156,22 +115,21 @@ class CommandParser:
             result = self.calculator.calculate(msg)
             return (True, result)
 
-        # Übersetzung: "übersetze ... auf/ins ..."
+        # Übersetzung: "übersetze ... auf/ins ..." → über NIM API (streamed)
         m = re.match(
             r"(?:übersetze|translate|übersetz)\s+[\"']?(.+?)[\"']?\s+(?:auf|ins?|to|nach)\s+(\w+)",
             lower,
         )
         if m:
-            text = m.group(1).strip()
             target = m.group(2).strip()
-            # Originaltext aus der Nachricht extrahieren (Groß-/Kleinschreibung beibehalten)
             orig_text = re.sub(
                 r"(?i)(?:übersetze|translate|übersetz)\s+[\"']?(.+?)[\"']?\s+(?:auf|ins?|to|nach)\s+\w+",
                 r"\1",
                 msg,
             ).strip()
-            result = self.translator.translate(orig_text or text, target)
-            return (True, result)
+            if self.nim_client:
+                return (True, f"__TRANSLATE__:{target}:{orig_text}")
+            return (True, "⚠️ Kein API-Key konfiguriert. Übersetzung benötigt die NVIDIA NIM API.")
 
         # Dateisuche: "suche datei ...", "finde datei ..."
         m = re.match(r"(?:suche|finde|such)\s+(?:datei|datein|file|files?)\s+(.+)", lower)

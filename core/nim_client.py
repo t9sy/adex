@@ -1,8 +1,10 @@
 """
 NVIDIA NIM API Client mit Streaming-Support.
-Verbindet sich mit dem meta/llama-3.1-70b-instruct Modell.
+Verbindet sich mit meta/llama-3.1-70b-instruct (Text) und
+meta/llama-3.2-90b-vision-instruct (Bild-Analyse).
 """
 
+import base64
 import json
 import requests
 from typing import Generator, Optional
@@ -13,6 +15,7 @@ class NIMClient:
 
     API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
     MODEL = "meta/llama-3.1-70b-instruct"
+    VISION_MODEL = "meta/llama-3.2-90b-vision-instruct"
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -167,6 +170,106 @@ class NIMClient:
             return content
         except requests.exceptions.RequestException as e:
             return f"⚠️ Fehler bei der API-Anfrage: {e}"
+
+    def stream_vision(
+        self,
+        image_path: str,
+        prompt: str = "Beschreibe dieses Bild detailliert auf Deutsch.",
+    ) -> Generator[str, None, None]:
+        """
+        Bild an das Vision-Modell senden und Streaming-Antwort erhalten.
+        Unterstützt PNG, JPG, JPEG.
+        """
+        import os
+
+        if not os.path.exists(image_path):
+            yield f"⚠️ Bild nicht gefunden: {image_path}"
+            return
+
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+        mime = mime_map.get(ext, "image/png")
+
+        with open(image_path, "rb") as f:
+            image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{image_b64}"},
+                    },
+                ],
+            }
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.VISION_MODEL,
+            "messages": messages,
+            "temperature": 0.5,
+            "max_tokens": 2048,
+            "stream": True,
+        }
+
+        try:
+            with requests.post(
+                self.API_URL,
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=90,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    line_str = line.decode("utf-8")
+                    if line_str.startswith("data: "):
+                        data_str = line_str[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield content
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            continue
+        except requests.exceptions.ConnectionError:
+            yield "\n⚠️ Verbindungsfehler: Keine Internetverbindung oder API nicht erreichbar."
+        except requests.exceptions.Timeout:
+            yield "\n⚠️ Zeitüberschreitung: Die Vision-API hat nicht rechtzeitig geantwortet."
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "unbekannt"
+            if status == 401:
+                yield "\n⚠️ Ungültiger API-Key."
+            elif status == 429:
+                yield "\n⚠️ Rate-Limit erreicht. Bitte warte einen Moment."
+            else:
+                yield f"\n⚠️ Vision-API-Fehler (Status {status}): {e}"
+        except requests.exceptions.RequestException as e:
+            yield f"\n⚠️ Netzwerkfehler: {e}"
+
+    def translate(
+        self,
+        text: str,
+        target_lang: str = "Englisch",
+    ) -> Generator[str, None, None]:
+        """Übersetzung über die NIM API (streamed)."""
+        prompt = (
+            f"Übersetze den folgenden Text ins {target_lang}. "
+            f"Gib NUR die Übersetzung aus, ohne Erklärung oder Einleitung.\n\n"
+            f"Text: {text}"
+        )
+        yield from self.stream_chat(prompt)
 
     def validate_api_key(self) -> bool:
         """Prüft ob der API-Key gültig ist."""

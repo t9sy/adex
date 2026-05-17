@@ -61,8 +61,6 @@ class MainWindow(QMainWindow):
         self.system_monitor = SystemMonitor()
         self.file_assistant = FileAssistant()
         self.clipboard_monitor = ClipboardMonitor()
-        self.command_parser = CommandParser(self.file_assistant, self.web_search)
-
         # NIM-Client initialisieren falls API-Key vorhanden
         api_key = config.get_api_key()
         if api_key:
@@ -70,6 +68,10 @@ class MainWindow(QMainWindow):
             self.nim_client.set_system_prompt(config.get_system_prompt())
             self.nim_client.set_temperature(config.get_temperature())
             self.nim_client.set_max_tokens(config.get_max_tokens())
+
+        self.command_parser = CommandParser(
+            self.file_assistant, self.web_search, self.nim_client
+        )
 
         self._setup_window()
         self._setup_ui()
@@ -948,6 +950,7 @@ class MainWindow(QMainWindow):
         self.nim_client.set_temperature(self.config.get_temperature())
         self.nim_client.set_max_tokens(self.config.get_max_tokens())
         self.chat_widget.set_nim_client(self.nim_client)
+        self.command_parser.nim_client = self.nim_client
 
         QMessageBox.information(self, "Gespeichert", "API-Key wurde gespeichert und aktiviert.")
 
