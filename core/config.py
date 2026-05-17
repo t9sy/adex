@@ -89,7 +89,11 @@ class ConfigManager:
 
     def _get_fernet_key(self) -> bytes:
         """Maschinengebundenen Fernet-Schlüssel ableiten."""
-        machine_id = f"{os.getlogin()}@{os.path.expanduser('~')}"
+        try:
+            user = os.getlogin()
+        except OSError:
+            user = os.environ.get("USER", os.environ.get("USERNAME", "adex"))
+        machine_id = f"{user}@{os.path.expanduser('~')}"
         key_hash = hashlib.sha256(machine_id.encode("utf-8")).digest()
         return base64.urlsafe_b64encode(key_hash)
 
