@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e17;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a2035;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0088FF;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Hintergrund -->
+  <circle cx="100" cy="100" r="96" fill="url(#bgGrad)" stroke="url(#accentGrad)" stroke-width="2" />
+
+  <!-- Innerer Kreis mit Glow -->
+  <circle cx="100" cy="100" r="70" fill="none" stroke="url(#accentGrad)" stroke-width="1.5" opacity="0.3" />
+
+  <!-- "A" Buchstabe -->
+  <text x="100" y="125" text-anchor="middle" font-family="Segoe UI, Inter, sans-serif"
+        font-size="90" font-weight="800" fill="url(#accentGrad)" filter="url(#glow)">A</text>
+
+  <!-- Dekorative Punkte -->
+  <circle cx="100" cy="28" r="4" fill="#00D4FF" opacity="0.8" />
+  <circle cx="172" cy="100" r="3" fill="#00D4FF" opacity="0.5" />
+  <circle cx="100" cy="172" r="3" fill="#00D4FF" opacity="0.5" />
+  <circle cx="28" cy="100" r="3" fill="#00D4FF" opacity="0.5" />
+</svg>

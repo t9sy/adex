@@ -1,0 +1,9 @@
+PyQt6==6.7.0
+requests==2.32.0
+psutil==6.0.0
+feedparser==6.0.11
+beautifulsoup4==4.12.3
+pyperclip==1.9.0
+keyboard==0.13.5
+Pillow==10.4.0
+pyinstaller==6.10.0

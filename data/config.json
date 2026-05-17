@@ -1,0 +1,24 @@
+{
+  "api_key_encoded": "",
+  "system_prompt": "Du bist Adex, ein intelligenter und hilfsbreiter KI-Assistent. Du antwortest präzise, freundlich und hilfreich. Wenn du Code schreibst, nutze Markdown-Code-Blöcke mit Sprachangabe.",
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "max_history": 20,
+  "theme": "dark",
+  "language": "de",
+  "hotkey": "ctrl+shift+a",
+  "always_on_top": false,
+  "start_minimized": false,
+  "clipboard_monitor": false,
+  "news_feeds": {
+    "Tagesschau": "https://www.tagesschau.de/xml/rss2/",
+    "Heise": "https://www.heise.de/rss/heise-atom.xml",
+    "BBC News": "http://feeds.bbci.co.uk/news/rss.xml",
+    "Spiegel": "https://www.spiegel.de/schlagzeilen/tops/index.rss",
+    "Golem.de": "https://rss.golem.de/rss.php?feed=RSS2.0"
+  },
+  "mini_mode_width": 500,
+  "mini_mode_height": 60,
+  "window_width": 1200,
+  "window_height": 800
+}
