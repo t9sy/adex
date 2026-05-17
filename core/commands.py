@@ -67,6 +67,7 @@ class Calculator:
             (r"\bmal\b", "*"), (r"\btimes\b", "*"),
             (r"\bgeteilt\s*durch\b", "/"), (r"\bdivided\s*by\b", "/"),
             (r"\bhoch\b", "**"), (r"\bpower\b", "**"),
+            (r"\bwurzel\s*(?:von|aus)?\s*(\d+(?:\.\d+)?)", r"sqrt(\1)"),
             (r"\bwurzel\s*(?:von|aus)?\b", "sqrt"),
             (r"\bmodulo\b", "%"),
         ]
@@ -198,6 +199,6 @@ class CommandParser:
             r"\d+\s*[+\-*/]\s*\d+",
             r"\d+\s*%\s*(?:von|of)\s*\d+",
             r"(?:was ist|berechne|rechne|wie viel|calculate|what is)\s+\d",
-            r"(?:wurzel|sqrt|sin|cos|tan|log)\s*\(?",
+            r"(?:wurzel|sqrt|sin|cos|tan|log)[\s(]",
         ]
         return any(re.search(p, text) for p in calc_patterns)
