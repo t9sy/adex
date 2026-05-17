@@ -1,14 +1,17 @@
 """
 Konfigurations-Manager.
 Lädt und speichert Einstellungen aus config.json.
-API-Keys werden base64-verschleiert gespeichert (keine Klartext-Speicherung).
+API-Keys werden mit Fernet (AES-128-CBC) verschlüsselt gespeichert.
 """
 
 import json
 import base64
 import os
+import hashlib
 from pathlib import Path
 from typing import Any, Optional
+
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class ConfigManager:
@@ -82,22 +85,45 @@ class ConfigManager:
         self.config[key] = value
         self.save()
 
-    # --- API-Key-Verwaltung (base64-verschleiert) ---
+    # --- API-Key-Verwaltung (Fernet-verschlüsselt) ---
+
+    def _get_fernet_key(self) -> bytes:
+        """Maschinengebundenen Fernet-Schlüssel ableiten."""
+        machine_id = f"{os.getlogin()}@{os.path.expanduser('~')}"
+        key_hash = hashlib.sha256(machine_id.encode("utf-8")).digest()
+        return base64.urlsafe_b64encode(key_hash)
 
     def set_api_key(self, api_key: str) -> None:
-        """API-Key base64-verschleiert speichern."""
-        encoded = base64.b64encode(api_key.encode("utf-8")).decode("utf-8")
-        self.set("api_key_encoded", encoded)
+        """API-Key verschlüsselt speichern (Fernet/AES)."""
+        fernet = Fernet(self._get_fernet_key())
+        encrypted = fernet.encrypt(api_key.encode("utf-8")).decode("utf-8")
+        self.set("api_key_encrypted", encrypted)
+        # Altes base64-Feld entfernen falls vorhanden
+        if "api_key_encoded" in self.config:
+            del self.config["api_key_encoded"]
+            self.save()
 
     def get_api_key(self) -> str:
-        """API-Key aus gespeicherter Konfiguration lesen und entschlüsseln."""
+        """API-Key entschlüsseln und zurückgeben."""
+        # Neues Fernet-Format
+        encrypted = self.config.get("api_key_encrypted", "")
+        if encrypted:
+            try:
+                fernet = Fernet(self._get_fernet_key())
+                return fernet.decrypt(encrypted.encode("utf-8")).decode("utf-8")
+            except (InvalidToken, Exception):
+                return ""
+        # Rückwärtskompatibilität: altes base64-Format migrieren
         encoded = self.config.get("api_key_encoded", "")
-        if not encoded:
-            return ""
-        try:
-            return base64.b64decode(encoded.encode("utf-8")).decode("utf-8")
-        except Exception:
-            return ""
+        if encoded:
+            try:
+                key = base64.b64decode(encoded.encode("utf-8")).decode("utf-8")
+                if key:
+                    self.set_api_key(key)
+                    return key
+            except Exception:
+                pass
+        return ""
 
     def has_api_key(self) -> bool:
         """Prüfen ob ein API-Key konfiguriert ist."""

@@ -199,10 +199,54 @@ class AdexApp:
         return self.app.exec()
 
 
+def _acquire_lock() -> bool:
+    """
+    Einfache Datei-Sperre für Einzelinstanz.
+    Speichert die PID in der Lock-Datei und prüft ob der Prozess noch läuft.
+    """
+    lock_file = os.path.join(os.path.expanduser("~"), ".adex.lock")
+
+    if os.path.exists(lock_file):
+        try:
+            with open(lock_file, "r") as f:
+                old_pid = int(f.read().strip())
+            # Prüfen ob der alte Prozess noch läuft
+            try:
+                os.kill(old_pid, 0)
+                # Prozess läuft noch → Instanz aktiv
+                return False
+            except (OSError, ProcessLookupError):
+                # Prozess existiert nicht mehr → stale Lock
+                pass
+        except (ValueError, IOError):
+            pass
+
+    # Lock-Datei mit aktueller PID erstellen
+    try:
+        with open(lock_file, "w") as f:
+            f.write(str(os.getpid()))
+    except IOError:
+        pass
+    return True
+
+
+def _release_lock() -> None:
+    """Lock-Datei entfernen."""
+    lock_file = os.path.join(os.path.expanduser("~"), ".adex.lock")
+    try:
+        with open(lock_file, "r") as f:
+            stored_pid = int(f.read().strip())
+        if stored_pid == os.getpid():
+            os.remove(lock_file)
+    except (ValueError, IOError, OSError):
+        pass
+
+
 def main() -> None:
     """Hauptfunktion — Adex starten."""
-    # Sicherstellen dass nur eine Instanz läuft (einfache Datei-Sperre)
-    lock_file = os.path.join(os.path.expanduser("~"), ".adex.lock")
+    if not _acquire_lock():
+        print("Adex läuft bereits. Nur eine Instanz erlaubt.")
+        sys.exit(0)
 
     try:
         adex = AdexApp()
@@ -211,11 +255,7 @@ def main() -> None:
         print(f"Kritischer Fehler: {e}")
         sys.exit(1)
     finally:
-        # Lock-Datei entfernen
-        try:
-            os.remove(lock_file)
-        except OSError:
-            pass
+        _release_lock()
 
 
 if __name__ == "__main__":

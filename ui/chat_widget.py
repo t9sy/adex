@@ -16,6 +16,7 @@ from PyQt6.QtGui import QKeyEvent, QTextCursor, QFont
 
 from core.nim_client import NIMClient
 from core.database import Database
+from core.commands import CommandParser
 
 
 class StreamWorker(QThread):
@@ -202,11 +203,13 @@ class ChatWidget(QWidget):
         self,
         nim_client: Optional[NIMClient] = None,
         database: Optional[Database] = None,
+        command_parser: Optional[CommandParser] = None,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self.nim_client = nim_client
         self.database = database
+        self.command_parser = command_parser
         self.session_id = str(uuid.uuid4())[:8]
         self._stream_worker: Optional[StreamWorker] = None
         self._current_bubble: Optional[MessageBubble] = None
@@ -299,6 +302,15 @@ class ChatWidget(QWidget):
 
         # Eingabe leeren
         self.chat_input.clear()
+
+        # Lokale Kommandos prüfen (Rechner, Übersetzung, Datei-Ops)
+        if self.command_parser:
+            handled, response = self.command_parser.try_parse(text)
+            if handled:
+                self._add_message_bubble(response, is_user=False, timestamp=timestamp)
+                if self.database:
+                    self.database.save_chat_message(self.session_id, "assistant", response)
+                return
 
         # KI-Antwort starten
         if self.nim_client:

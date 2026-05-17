@@ -1,6 +1,7 @@
 """
 Clipboard-Monitor-Modul.
 Überwacht die Zwischenablage und ermöglicht Textanalyse.
+Thread-sicher durch Qt Signal/Slot-Mechanismus.
 """
 
 import threading
@@ -8,17 +9,23 @@ import time
 from typing import Callable, Optional
 
 import pyperclip
+from PyQt6.QtCore import QObject, pyqtSignal
+
+
+class ClipboardSignalBridge(QObject):
+    """Bridge für thread-sichere Clipboard-Benachrichtigungen."""
+    clipboard_changed = pyqtSignal(str)
 
 
 class ClipboardMonitor:
-    """Zwischenablage überwachen und kopierten Text verarbeiten."""
+    """Zwischenablage überwachen und kopierten Text verarbeiten (thread-sicher)."""
 
     def __init__(self):
         self._monitoring = False
         self._thread: Optional[threading.Thread] = None
         self._last_content = ""
-        self._callback: Optional[Callable[[str], None]] = None
-        self._poll_interval = 1.0  # Sekunden zwischen Prüfungen
+        self._poll_interval = 1.0
+        self._signal_bridge = ClipboardSignalBridge()
 
     def get_clipboard(self) -> str:
         """Aktuellen Inhalt der Zwischenablage abrufen."""
@@ -38,12 +45,12 @@ class ClipboardMonitor:
     def start_monitoring(self, callback: Callable[[str], None]) -> None:
         """
         Clipboard-Überwachung starten.
-        callback wird bei jeder Änderung mit dem neuen Text aufgerufen.
+        callback wird thread-sicher über Qt-Signals aufgerufen.
         """
         if self._monitoring:
             return
 
-        self._callback = callback
+        self._signal_bridge.clipboard_changed.connect(callback)
         self._monitoring = True
         self._last_content = self.get_clipboard()
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -52,6 +59,10 @@ class ClipboardMonitor:
     def stop_monitoring(self) -> None:
         """Clipboard-Überwachung stoppen."""
         self._monitoring = False
+        try:
+            self._signal_bridge.clipboard_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
         if self._thread:
             self._thread.join(timeout=3)
             self._thread = None
@@ -63,8 +74,7 @@ class ClipboardMonitor:
                 current = self.get_clipboard()
                 if current and current != self._last_content:
                     self._last_content = current
-                    if self._callback:
-                        self._callback(current)
+                    self._signal_bridge.clipboard_changed.emit(current)
             except Exception:
                 pass
             time.sleep(self._poll_interval)

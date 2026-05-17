@@ -24,6 +24,7 @@ from core.file_ops import FileAssistant
 from core.clipboard import ClipboardMonitor
 from core.database import Database
 from core.config import ConfigManager
+from core.commands import CommandParser
 from ui.chat_widget import ChatWidget
 
 
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
         self.system_monitor = SystemMonitor()
         self.file_assistant = FileAssistant()
         self.clipboard_monitor = ClipboardMonitor()
+        self.command_parser = CommandParser(self.file_assistant, self.web_search)
 
         # NIM-Client initialisieren falls API-Key vorhanden
         api_key = config.get_api_key()
@@ -194,7 +196,7 @@ class MainWindow(QMainWindow):
 
     def _create_chat_view(self) -> None:
         """Chat-Ansicht erstellen."""
-        self.chat_widget = ChatWidget(self.nim_client, self.database)
+        self.chat_widget = ChatWidget(self.nim_client, self.database, self.command_parser)
         self.stack.addWidget(self.chat_widget)
 
     def _create_web_search_view(self) -> None:
