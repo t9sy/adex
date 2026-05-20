@@ -65,6 +65,10 @@ A production-ready Discord bot with a modern web dashboard. Built with TypeScrip
 - Node.js 20+
 - pnpm 9+
 - Docker & Docker Compose (for database/redis)
+- **System dependencies** (Debian/Ubuntu) for Canvas rank cards:
+```bash
+sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config python3
+```
 
 ### Setup
 
