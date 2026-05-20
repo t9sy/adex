@@ -1,14 +1,15 @@
 import { initTRPC, TRPCError } from '@trpc/server';
+import { type Session } from 'next-auth';
 import { auth } from '@/lib/auth';
 import superjson from 'superjson';
 
 interface Context {
-  session: Awaited<ReturnType<typeof auth>> | null;
+  session: Session | null;
 }
 
 export async function createContext(): Promise<Context> {
   const session = await auth();
-  return { session };
+  return { session: session ?? null };
 }
 
 const t = initTRPC.context<Context>().create({

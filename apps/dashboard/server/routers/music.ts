@@ -21,7 +21,7 @@ export const musicRouter = router({
 
       return prisma.guild.update({
         where: { guildId: input.guildId },
-        data: { settings: newSettings as unknown as Record<string, unknown> },
+        data: { settings: JSON.parse(JSON.stringify(newSettings)) },
       });
     }),
 });

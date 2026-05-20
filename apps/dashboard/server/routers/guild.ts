@@ -5,7 +5,7 @@ import { DEFAULT_GUILD_SETTINGS, guildGeneralSchema } from '@discord-bot/shared'
 
 export const guildRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const accessToken = (ctx.session as Record<string, unknown>).accessToken as string;
+    const accessToken = ctx.session.accessToken;
 
     const response = await fetch('https://discord.com/api/v10/users/@me/guilds', {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -38,7 +38,7 @@ export const guildRouter = router({
         where: { guildId: input.guildId },
         create: {
           guildId: input.guildId,
-          settings: DEFAULT_GUILD_SETTINGS as unknown as Record<string, unknown>,
+          settings: JSON.parse(JSON.stringify(DEFAULT_GUILD_SETTINGS)),
         },
         update: {},
       });

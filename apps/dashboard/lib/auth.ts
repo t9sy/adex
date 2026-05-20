@@ -1,6 +1,12 @@
 import NextAuth from 'next-auth';
 import Discord from 'next-auth/providers/discord';
 
+declare module 'next-auth' {
+  interface Session {
+    accessToken?: string;
+  }
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Discord({
@@ -21,7 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      (session as Record<string, unknown>).accessToken = token.accessToken;
+      session.accessToken = token.accessToken as string | undefined;
       return session;
     },
   },
