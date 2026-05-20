@@ -1,0 +1,37 @@
+{
+  "name": "discord-bot-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Discord Bot with Web Dashboard",
+  "scripts": {
+    "dev:bot": "pnpm --filter @discord-bot/bot dev",
+    "dev:dashboard": "pnpm --filter @discord-bot/dashboard dev",
+    "dev": "pnpm run dev:bot & pnpm run dev:dashboard",
+    "build": "pnpm -r build",
+    "build:bot": "pnpm --filter @discord-bot/bot build",
+    "build:dashboard": "pnpm --filter @discord-bot/dashboard build",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @discord-bot/db generate",
+    "db:push": "pnpm --filter @discord-bot/db push",
+    "db:migrate": "pnpm --filter @discord-bot/db migrate",
+    "db:studio": "pnpm --filter @discord-bot/db studio",
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "husky"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.1",
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "typescript-eslint": "^8.59.4"
+  }
+}

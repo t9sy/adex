@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id        String   @id @default(cuid())
+  guildId   String   @unique
+  settings  Json     @default("{}")
+  language  String   @default("en")
+  prefix    String   @default("!")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  moderationLogs     ModerationLog[]
+  tickets            Ticket[]
+  giveaways          Giveaway[]
+  levelRoles         LevelRole[]
+  reactionRoleMessages ReactionRoleMessage[]
+  shopItems          ShopItem[]
+
+  @@map("guilds")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  userId    String
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  xp        Int      @default(0)
+  level     Int      @default(0)
+  coins     Int      @default(0)
+  warns     Int      @default(0)
+  lastDaily DateTime?
+  lastWork  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  moderationLogs     ModerationLog[] @relation("UserLogs")
+  moderatorActions   ModerationLog[] @relation("ModeratorLogs")
+  tickets            Ticket[]
+  giveawayEntries    GiveawayEntry[]
+  inventory          UserInventory[]
+  reminders          Reminder[]
+
+  @@unique([userId, guildId])
+  @@map("users")
+}
+
+model ModerationLog {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  userId      String
+  user        User     @relation("UserLogs", fields: [userId, guildId], references: [userId, guildId], onDelete: Cascade)
+  moderatorId String
+  moderator   User     @relation("ModeratorLogs", fields: [moderatorId, guildId], references: [userId, guildId], onDelete: Cascade)
+  action      String
+  reason      String?
+  duration    Int?
+  createdAt   DateTime @default(now())
+
+  @@map("moderation_logs")
+}
+
+model Ticket {
+  id         String    @id @default(cuid())
+  guildId    String
+  guild      Guild     @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId, guildId], references: [userId, guildId], onDelete: Cascade)
+  channelId  String    @unique
+  category   String    @default("general")
+  subject    String?
+  status     String    @default("open")
+  transcript Json?
+  createdAt  DateTime  @default(now())
+  closedAt   DateTime?
+
+  @@map("tickets")
+}
+
+model Giveaway {
+  id          String    @id @default(cuid())
+  guildId     String
+  guild       Guild     @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  channelId   String
+  messageId   String    @unique
+  prize       String
+  winners     Int       @default(1)
+  endsAt      DateTime
+  ended       Boolean   @default(false)
+  hostId      String
+  createdAt   DateTime  @default(now())
+
+  entries     GiveawayEntry[]
+
+  @@map("giveaways")
+}
+
+model GiveawayEntry {
+  id          String   @id @default(cuid())
+  giveawayId  String
+  giveaway    Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  userId      String
+  guildId     String
+  user        User     @relation(fields: [userId, guildId], references: [userId, guildId], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([giveawayId, userId])
+  @@map("giveaway_entries")
+}
+
+model LevelRole {
+  id      String @id @default(cuid())
+  guildId String
+  guild   Guild  @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  level   Int
+  roleId  String
+
+  @@unique([guildId, level])
+  @@map("level_roles")
+}
+
+model ReactionRoleMessage {
+  id        String         @id @default(cuid())
+  guildId   String
+  guild     Guild          @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  channelId String
+  messageId String         @unique
+  title     String?
+  color     String?
+  mode      String         @default("multi")
+  createdAt DateTime       @default(now())
+
+  roles     ReactionRole[]
+
+  @@map("reaction_role_messages")
+}
+
+model ReactionRole {
+  id        String              @id @default(cuid())
+  messageId String
+  message   ReactionRoleMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  emoji     String
+  roleId    String
+  label     String?
+
+  @@unique([messageId, emoji])
+  @@map("reaction_roles")
+}
+
+model ShopItem {
+  id          String          @id @default(cuid())
+  guildId     String
+  guild       Guild           @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  name        String
+  description String?
+  price       Int
+  roleId      String?
+  createdAt   DateTime        @default(now())
+
+  inventory   UserInventory[]
+
+  @@unique([guildId, name])
+  @@map("shop_items")
+}
+
+model UserInventory {
+  id       String   @id @default(cuid())
+  userId   String
+  guildId  String
+  user     User     @relation(fields: [userId, guildId], references: [userId, guildId], onDelete: Cascade)
+  itemId   String
+  item     ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity Int      @default(1)
+
+  @@unique([userId, guildId, itemId])
+  @@map("user_inventory")
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  userId    String
+  guildId   String
+  user      User     @relation(fields: [userId, guildId], references: [userId, guildId], onDelete: Cascade)
+  channelId String
+  message   String
+  triggerAt DateTime
+  fired     Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("reminders")
+}
